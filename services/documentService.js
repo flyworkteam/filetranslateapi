@@ -12,6 +12,14 @@ class DocumentService {
         const user = await userRepository.findById(userId);
         if (!user) throw new Error('Kullanıcı bulunamadı.');
 
+        if (!user.is_premium) {
+            // Toplam çeviri sayısını çekiyoruz
+            const totalCount = await documentRepository.getTotalCountByUserId(userId);
+            if (totalCount >= 1) {
+                throw new Error('LIMIT_EXCEEDED: Ücretsiz deneme hakkınız doldu.'); // Mesaj düzeltildi
+            }
+        }
+
         logger.info(`Çeviri Başlıyor: User: ${userId}, File: ${file.originalname}, Target: ${targetLang}`);
 
         // 2. DOSYA UZANTISINI KONTROL ET VE İLGİLİ API'YE YÖNLENDİR
