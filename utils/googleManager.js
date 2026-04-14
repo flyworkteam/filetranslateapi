@@ -1,9 +1,7 @@
 const { TranslationServiceClient } = require('@google-cloud/translate');
 const path = require('path');
-const os = require('os');
-const fs = require('fs/promises');
 
-// 1. Google Cloud yetkilendirmesi (JSON dosyanın proje kök dizininde olduğunu varsayıyoruz)
+// 1. Google Cloud yetkilendirmesi
 const projectId = 'file-translate-93ebe';
 const keyFilename = path.join(__dirname, '../file-translate-93ebe-59170bb55fa4.json');
 
@@ -18,34 +16,39 @@ class GoogleManager {
      * Dökümanı Google Cloud Translation API (V3) ile çevirir.
      */
     async translateDocument(fileBuffer, fileName, targetLang) {
-        let tempInputPath = null;
-        let tempOutputPath = null;
-
         try {
-            // Google Cloud V3 API, dosyanın MIME tipini bilmek ister.
+            // Dosyanın MIME tipini alıyoruz (Artık PDF de destekli)
             const mimeType = this._getMimeType(fileName);
 
-            // Google API, buffer'ı doğrudan base64 formatında alabilir. Geçici dosyaya gerek yok!
             const documentInputConfig = {
-                content: fileBuffer.toString('base64'),
+                content: fileBuffer, 
                 mimeType: mimeType,
             };
 
             const request = {
-                parent: `projects/${projectId}/locations/us-central1`, // Regional endpoint kullanmak daha güvenlidir
+                parent: `projects/${projectId}/locations/us-central1`, 
                 documentInputConfig: documentInputConfig,
-                targetLanguageCode: targetLang.toLowerCase(), // Google küçük harf bekleyebilir (ör: 'en', 'es')
+                targetLanguageCode: targetLang.toLowerCase(), 
             };
 
-            console.log(`Google API Çeviri İsteği Gönderiliyor: ${fileName} -> ${targetLang}`);
+            console.log(`Google API Çeviri İsteği Gönderiliyor: ${fileName} -> ${targetLang} (MIME: ${mimeType})`);
 
             // API'ye istek at
             const [response] = await translationClient.translateDocument(request);
 
-            // Dönen çevrilmiş dosyayı buffer olarak al
-            const translatedBuffer = response.documentTranslation.byteStreamResult;
-
-            return translatedBuffer;
+            // Google veriyi 'byteStreamOutputs' adında bir DİZİ (Array) olarak döndürür!
+            if (
+                response.documentTranslation && 
+                response.documentTranslation.byteStreamOutputs && 
+                response.documentTranslation.byteStreamOutputs.length > 0
+            ) {
+                // Dizinin ilk elemanını Buffer olarak alıyoruz
+                const translatedBuffer = Buffer.from(response.documentTranslation.byteStreamOutputs[0]);
+                return translatedBuffer;
+            } else {
+                console.error("Beklenmeyen Google Yanıtı:", JSON.stringify(response, null, 2));
+                throw new Error("Google API çevrilmiş dosya verisini döndürmedi.");
+            }
 
         } catch (error) {
             console.error('Google Manager Error:', error);
@@ -53,12 +56,16 @@ class GoogleManager {
         }
     }
 
+
     /**
-     * Dosya uzantısına göre MIME tipini belirler.
+     * Dosya uzantısına göre MIME tipini belirler. Görünmez boşlukları temizler.
      */
     _getMimeType(fileName) {
-        const ext = path.extname(fileName).toLowerCase();
+        const ext = path.extname(fileName).toLowerCase().trim();
+        
         switch (ext) {
+            case '.pdf':
+                return 'application/pdf'; // Hata durumunda Google'a düşerse patlamasın diye eklendi
             case '.docx':
                 return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
             case '.pptx':
