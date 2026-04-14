@@ -54,7 +54,7 @@ class DocumentService {
 
             'ş': 's', 'Ş': 'S', 'ü': 'u', 'Ü': 'U'
 
-                    // 2. Türkçe karakterleri İngilizce eşdeğerine çevir
+        };
 
         let cleanName = decodedName.replace(/[çÇğĞıİöÖşŞüÜ]/g, match => trMap[match]);
 
